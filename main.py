@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkinter import filedialog, messagebox
 import pandas as pd
 
-from utils import get_encoding_type, get_number_of_rows
+from utils import get_encoding_type
 
 
 class DDLGeneratorApp:
