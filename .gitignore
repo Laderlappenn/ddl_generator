@@ -1,6 +1,7 @@
 .env
 
-
+*.xlsx
+*.csv
 *.pyc
 *~
 venv
