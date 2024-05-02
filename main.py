@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkinter import filedialog, messagebox
 import pandas as pd
 
-from utils import get_encoding_type
+from utils import get_encoding_type, get_number_of_rows
 
 
 class DDLGeneratorApp:
@@ -20,12 +20,12 @@ class DDLGeneratorApp:
         self.select_button = tk.Button(master, text="Select File", command=self.select_file)
         self.select_button.pack()
 
-        self.dbms_label = tk.Label(master, text="Выбор СУБД:")
-        self.dbms_label.pack()
-
-        self.dbms = ["Clickhouse", "PostgreSQL"]
-        combobox = ttk.Combobox(values=self.dbms, state="readonly")
-        combobox.pack()
+        # self.dbms_label = tk.Label(master, text="Выбор СУБД:")
+        # self.dbms_label.pack()
+        #
+        # self.dbms = ["Clickhouse", "PostgreSQL"]
+        # combobox = ttk.Combobox(values=self.dbms, state="readonly")
+        # combobox.pack()
 
         self.database_name_label = tk.Label(master, text="Введите название базы данных")
         self.database_name_label.pack()
@@ -36,8 +36,8 @@ class DDLGeneratorApp:
         self.table_name_label = tk.Label(master, text="Введите название таблицы")
         self.table_name_label.pack()
 
-        self.database_name_text = tk.Entry(master)
-        self.database_name_text.pack()
+        self.table_name_text = tk.Entry(master)
+        self.table_name_text.pack()
 
         self.output_text = tk.Text(master, height=20, width=50)
         self.output_text.pack()
@@ -61,20 +61,29 @@ class DDLGeneratorApp:
                     messagebox.showerror("Error", "Unsupported file format")
                     return
 
+                if df.shape[0] >= 1_000_000:
+                    engine = "MergeTree()"
+                else:
+                    engine = "Log"
+
+                primary_key = next(df.dtypes.items())[0]
+
                 ddl_statements = []
-                ddl_statements.append(f"CREATE TABLE database.table\n(")
+                ddl_statements.append(f"CREATE TABLE {self.database_name_text.get()}.{self.table_name_text.get()}\n(")
                 for column_name, dtype in df.dtypes.items():
                     if dtype == 'int64':
-                        ddl_statements.append(f"    `{column_name}` Int64,")
+                        ddl_statements.append(f"    `{column_name}` Nullable(Int64),")
                     elif dtype == 'float64':
-                        ddl_statements.append(f"    `{column_name}` Float64,")
+                        ddl_statements.append(f"    `{column_name}` Nullable(Float64),")
                     elif dtype == 'datetime64[ns]':
-                        ddl_statements.append(f"    `{column_name}` DateTime,")
+                        ddl_statements.append(f"    `{column_name}` Nullable(DateTime),")
                     elif dtype == 'object':
-                        ddl_statements.append(f"    `{column_name}` String,")
-                    # Add more data types as needed
-                ddl_statements.append(f")\nENGINE = MergeTree()\nORDER BY CounterID")
+                        ddl_statements.append(f"    `{column_name}` Nullable(String),")
+                ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
 
+                ddl_statements.append(f"ENGINE = {engine}")
+                ddl_statements.append(f"ORDER BY {primary_key}")
+                ddl_statements.append("SETTINGS index_granularity = 8192;")
 
                 ddl_output = "\n".join(ddl_statements)
                 self.output_text.delete('1.0', tk.END)
