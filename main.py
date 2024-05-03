@@ -1,9 +1,14 @@
 import tkinter as tk
-from tkinter import ttk
+# from tkinter import ttk
 from tkinter import filedialog, messagebox
+from tkinter.messagebox import *
 import pandas as pd
 
-from utils import get_encoding_type
+import ctypes, threading
+
+
+from utils import get_encoding_type, get_ddl_type, get_engine_type
+from updater import update
 
 
 class DDLGeneratorApp:
@@ -51,47 +56,47 @@ class DDLGeneratorApp:
 
     def generate_ddl(self):
         try:
-            encoding_type = get_encoding_type(self.filepath)
             if self.filepath:
                 if self.filepath.endswith('.csv'):
-                    df = pd.read_csv(self.filepath, encoding=encoding_type)
+                    try:
+                        df = pd.read_csv(self.filepath)
+                    except UnicodeDecodeError as unicode_error:
+                        popup = ctypes.windll.user32.MessageBoxW
+                        threading.Thread(target=lambda: popup(None, 'Автоматическое распознование кодировки', f'{unicode_error.__class__.__name__}', 0)).start()
+                        encoding_type = get_encoding_type(self.filepath)
+                        df = pd.read_csv(self.filepath, encoding=encoding_type)
                 elif self.filepath.endswith('.xlsx'):
                     df = pd.read_excel(self.filepath)
                 else:
                     messagebox.showerror("Error", "Unsupported file format")
                     return
 
-                if df.shape[0] >= 1_000_000:
-                    engine = "MergeTree()"
-                else:
-                    engine = "Log"
-
                 primary_key = next(df.dtypes.items())[0]
+                primary_key_type = next(df.dtypes.items())[1]
 
                 ddl_statements = []
                 ddl_statements.append(f"CREATE TABLE {self.database_name_text.get()}.{self.table_name_text.get()}\n(")
-                for column_name, dtype in df.dtypes.items():
-                    if dtype == 'int64':
-                        ddl_statements.append(f"    `{column_name}` Nullable(Int64),")
-                    elif dtype == 'float64':
-                        ddl_statements.append(f"    `{column_name}` Nullable(Float64),")
-                    elif dtype == 'datetime64[ns]':
-                        ddl_statements.append(f"    `{column_name}` Nullable(DateTime),")
-                    elif dtype == 'object':
-                        ddl_statements.append(f"    `{column_name}` Nullable(String),")
-                ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
+                ddl_statements.append(f"    `{primary_key}` {primary_key_type},")
 
-                ddl_statements.append(f"ENGINE = {engine}")
+                skip_first_iter = True
+                for column_name, dtype in df.dtypes.items():
+                    if skip_first_iter:
+                        skip_first_iter = False
+                        continue
+                    ddl_statements.append(get_ddl_type(column_name, dtype))
+
+                ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
+                ddl_statements.append(f"ENGINE = {get_engine_type(df)}")
                 ddl_statements.append(f"ORDER BY {primary_key}")
                 ddl_statements.append("SETTINGS index_granularity = 8192;")
 
                 ddl_output = "\n".join(ddl_statements)
-                self.output_text.delete('1.0', tk.END)
                 self.output_text.insert(tk.END, ddl_output)
             else:
                 messagebox.showerror("Error", "No file selected")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", str(e) + " " + str(e.__class__.__name__))
+
 
 
 def main():
@@ -101,4 +106,9 @@ def main():
 
 
 if __name__ == "__main__":
+    success, message = update()
+    if success:
+        print(message)
+    else:
+        print("Failed:", message)
     main()
