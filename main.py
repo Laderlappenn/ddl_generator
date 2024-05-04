@@ -9,7 +9,7 @@ import ctypes
 import threading
 
 
-from utils import get_encoding_type, get_ddl_type, get_engine_type
+from utils import get_ddl_type, get_engine_type, get_dataframe, get_delimiter
 from updater import update
 
 
@@ -63,32 +63,13 @@ class DDLGeneratorApp:
     def generate_ddl(self):
         try:
             if self.filepath:
-                if self.filepath.endswith('.csv'):
-                    try:
-                        if self.first_10000_rows_bool_var.get():
-                            df = pd.read_csv(self.filepath, nrows=10000)
-                        else:
-                            df = pd.read_csv(self.filepath, low_memory=False)
-                    except UnicodeDecodeError as unicode_error:
-                        popup = ctypes.windll.user32.MessageBoxW
-                        threading.Thread(target=lambda: popup(None, 'Автоматическое распознование кодировки', f'{unicode_error.__class__.__name__}', 0)).start()
-                        encoding_type = get_encoding_type(self.filepath)
-                        # ???
-                        if self.first_10000_rows_bool_var.get():
-                            df = pd.read_csv(self.filepath, encoding=encoding_type, nrows=10000)
-                        else:
-                            df = pd.read_csv(self.filepath, low_memory=False, encoding=encoding_type)
-                elif self.filepath.endswith('.xlsx'):
-                    df = pd.read_excel(self.filepath)
-                else:
-                    messagebox.showerror("Error", "Unsupported file format")
-                    return
-
-                primary_key = next(df.dtypes.items())[0]
-                primary_key_type = next(df.dtypes.items())[1]
+                df = get_dataframe(filepath=self.filepath, first_10000_rows=self.first_10000_rows_bool_var.get())
 
                 ddl_statements = []
                 ddl_statements.append(f"CREATE TABLE {self.database_name_text.get()}.{self.table_name_text.get()}\n(")
+
+                primary_key = next(df.dtypes.items())[0].upper()
+                primary_key_type = next(df.dtypes.items())[1]
                 ddl_statements.append(f"    `{primary_key}` {get_ddl_type(primary_key_type)},")
 
                 skip_first_iter = True
@@ -96,7 +77,8 @@ class DDLGeneratorApp:
                     if skip_first_iter:
                         skip_first_iter = False
                         continue
-                    ddl_statements.append(f"    `{column_name}` Nullable({get_ddl_type(dtype)}),")
+
+                    ddl_statements.append(f"    `{column_name.upper()}` Nullable({get_ddl_type(dtype)}),")
 
                 ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
                 ddl_statements.append(f"ENGINE = {get_engine_type(df)}")
