@@ -36,7 +36,6 @@ def get_dataframe(filepath, first_10000_rows=False, rows_num=None):
             ).start()
             encoding_type = get_encoding_type(filepath)
             df = pd.read_csv(filepath, encoding=encoding_type, nrows=nrows, low_memory=low_memory, na_filter=False, delimiter=delimiter)
-            print(df)
     elif filepath.endswith('.xlsx'):
         df = pd.read_excel(filepath)
     else:
