@@ -2,6 +2,7 @@ from tkinter import messagebox
 import ctypes
 import threading
 import csv
+import time
 
 
 from chardet import detect
@@ -11,7 +12,7 @@ import pandas as pd
 
 def get_delimiter(file_path: str) -> str:
     with open(file_path, 'r') as csvfile:
-        delimiter = str(csv.Sniffer().sniff(csvfile.read(1024)).delimiter)
+        delimiter = str(csv.Sniffer().sniff(csvfile.readline()).delimiter)
         return delimiter
 
 
@@ -48,7 +49,7 @@ def get_dataframe(filepath, first_10000_rows=False, rows_num=None):
 
 def get_encoding_type(file):
     with open(file, 'rb') as f:
-        rawdata = f.read()
+        rawdata = f.read(1024)
     return detect(rawdata)['encoding']
 
 
@@ -62,9 +63,26 @@ def get_ddl_type(dtype):
     elif dtype == 'object':
         return "String"
 
-def get_engine_type(df):
-    if df.shape[0] >= 1_000_000:
+# TODO do smth
+def get_engine_type(file_name, first_10000_rows=False, df=None):
+    if first_10000_rows:
+        with open(file_name) as f:
+            line_count = sum(1 for line in f)
+    else:
+        line_count = df.shape[0]
+    if line_count >= 1_000_000:
         engine = "MergeTree()"
     else:
         engine = "Log"
     return engine
+
+
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Execution time of '{func.__name__}': {execution_time:.6f} seconds")
+        return result
+    return wrapper

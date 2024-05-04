@@ -1,12 +1,21 @@
-import subprocess
 import os
+import sys
+
+import git
+
 
 repository_path = os.path.dirname(os.path.abspath(__file__))
+repo = git.Repo(repository_path)
 def update():
     try:
-        subprocess.run(['git', '-C', repository_path, 'pull'])
-        return True, "Changes pulled successfully."
+        current = repo.head.commit
+        repo.remotes.origin.pull()
+        if current != repo.head.commit:
+            print("Updated")
+            print("Exiting the program...")
+            sys.exit()
+        print("Already up to date")
     except Exception as e:
-        return False, f"Error pulling changes: {e}"
+        print(f"Error pulling changes: {e}")
 
 

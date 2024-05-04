@@ -3,13 +3,13 @@ from tkinter import ttk
 from tkinter import BooleanVar
 from tkinter import filedialog, messagebox
 from tkinter.messagebox import *
-import pandas as pd
+
 
 import ctypes
 import threading
 
 
-from utils import get_ddl_type, get_engine_type, get_dataframe, get_delimiter
+from utils import get_ddl_type, get_engine_type, get_dataframe, timer
 from updater import update
 
 
@@ -60,11 +60,11 @@ class DDLGeneratorApp:
         self.filepath = filedialog.askopenfilename(filetypes=self.filetypes)
         self.label.config(text="Выбранный файл: " + self.filepath)
 
+    @timer
     def generate_ddl(self):
         try:
             if self.filepath:
                 df = get_dataframe(filepath=self.filepath, first_10000_rows=self.first_10000_rows_bool_var.get())
-
                 ddl_statements = []
                 ddl_statements.append(f"CREATE TABLE {self.database_name_text.get()}.{self.table_name_text.get()}\n(")
 
@@ -81,9 +81,10 @@ class DDLGeneratorApp:
                     ddl_statements.append(f"    `{column_name.upper()}` Nullable({get_ddl_type(dtype)}),")
 
                 ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
-                ddl_statements.append(f"ENGINE = {get_engine_type(df)}")
+                ddl_statements.append(f"ENGINE = {get_engine_type(self.filepath, first_10000_rows=self.first_10000_rows_bool_var, df=df)}") # i don't like that df here
+                                                                                                                                            # because sometimes i don't need it
 
-                if get_engine_type(df) == "MergeTree()":
+                if get_engine_type(self.filepath, first_10000_rows=self.first_10000_rows_bool_var, df=df) == "MergeTree()":
                     ddl_statements.append(f"ORDER BY {primary_key}")
                     ddl_statements.append("SETTINGS index_granularity = 8192;\n")
                 else:
@@ -94,7 +95,7 @@ class DDLGeneratorApp:
             else:
                 messagebox.showerror("Error", "No file selected")
         except Exception as e:
-            messagebox.showerror("Error", str(e) + " " + str(e.__class__.__name__))
+            messagebox.showerror("Error", str(e) + "\n" + str(e.__class__.__name__))
 
 
 def main():
@@ -104,10 +105,5 @@ def main():
 
 
 if __name__ == "__main__":
-    success, message = update()
-    if success:
-        pass
-    else:
-        print("Failed:", message)
-
+    update()
     main()
