@@ -1,5 +1,6 @@
 import tkinter as tk
-# from tkinter import ttk
+from tkinter import ttk
+from tkinter import BooleanVar
 from tkinter import filedialog, messagebox
 from tkinter.messagebox import *
 import pandas as pd
@@ -21,10 +22,14 @@ class DDLGeneratorApp:
         self.master.title("DDL Generator")
 
         self.label = tk.Label(master, text="Выбор CSV или Excel файла:")
-        self.label.pack()
+        self.label.pack(padx=6, pady=6)
 
         self.select_button = tk.Button(master, text="Select File", command=self.select_file)
         self.select_button.pack()
+
+        self.first_10000_rows_bool_var = BooleanVar()
+        self.enabled_checkbutton = ttk.Checkbutton(text="Только первые 10000 строк", variable=self.first_10000_rows_bool_var)
+        self.enabled_checkbutton.pack(padx=6, pady=6)
 
         # self.dbms_label = tk.Label(master, text="Выбор СУБД:")
         # self.dbms_label.pack()
@@ -33,20 +38,20 @@ class DDLGeneratorApp:
         # combobox = ttk.Combobox(values=self.dbms, state="readonly")
         # combobox.pack()
 
-        self.database_name_label = tk.Label(master, text="Введите название базы данных")
+        self.database_name_label = tk.Label(master, text="Название базы данных")
         self.database_name_label.pack()
 
         self.database_name_text = tk.Entry(master)
-        self.database_name_text.pack()
+        self.database_name_text.pack(padx=6, pady=6)
 
-        self.table_name_label = tk.Label(master, text="Введите название таблицы")
+        self.table_name_label = tk.Label(master, text="Название таблицы")
         self.table_name_label.pack()
 
         self.table_name_text = tk.Entry(master)
-        self.table_name_text.pack()
+        self.table_name_text.pack(padx=6, pady=6)
 
         self.output_text = tk.Text(master, height=20, width=50)
-        self.output_text.pack()
+        self.output_text.pack(padx=6, pady=6)
 
         self.generate_button = tk.Button(master, text="Generate DDL", command=self.generate_ddl)
         self.generate_button.pack()
@@ -60,12 +65,19 @@ class DDLGeneratorApp:
             if self.filepath:
                 if self.filepath.endswith('.csv'):
                     try:
-                        df = pd.read_csv(self.filepath, low_memory=False)
+                        if self.first_10000_rows_bool_var.get():
+                            df = pd.read_csv(self.filepath, nrows=10000)
+                        else:
+                            df = pd.read_csv(self.filepath, low_memory=False)
                     except UnicodeDecodeError as unicode_error:
                         popup = ctypes.windll.user32.MessageBoxW
                         threading.Thread(target=lambda: popup(None, 'Автоматическое распознование кодировки', f'{unicode_error.__class__.__name__}', 0)).start()
                         encoding_type = get_encoding_type(self.filepath)
-                        df = pd.read_csv(self.filepath, encoding=encoding_type)
+                        # ???
+                        if self.first_10000_rows_bool_var.get():
+                            df = pd.read_csv(self.filepath, encoding=encoding_type, nrows=10000)
+                        else:
+                            df = pd.read_csv(self.filepath, low_memory=False, encoding=encoding_type)
                 elif self.filepath.endswith('.xlsx'):
                     df = pd.read_excel(self.filepath)
                 else:
@@ -88,8 +100,12 @@ class DDLGeneratorApp:
 
                 ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
                 ddl_statements.append(f"ENGINE = {get_engine_type(df)}")
-                ddl_statements.append(f"ORDER BY {primary_key}")
-                ddl_statements.append("SETTINGS index_granularity = 8192;\n")
+
+                if get_engine_type(df) == "MergeTree()":
+                    ddl_statements.append(f"ORDER BY {primary_key}")
+                    ddl_statements.append("SETTINGS index_granularity = 8192;\n")
+                else:
+                    ddl_statements.append("\n")
 
                 ddl_output = "\n".join(ddl_statements)
                 self.output_text.insert(tk.END, ddl_output)
