@@ -2,14 +2,9 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import BooleanVar
 from tkinter import filedialog, messagebox
-from tkinter.messagebox import *
 
 
-import ctypes
-import threading
-
-
-from utils import get_ddl_type, get_engine_type, get_dataframe, timer
+from utils import get_ddl_type, get_engine_type, get_dataframe, timer, check_cyrillic
 from updater import update
 
 
@@ -68,7 +63,7 @@ class DDLGeneratorApp:
                 ddl_statements = []
                 ddl_statements.append(f"CREATE TABLE {self.database_name_text.get()}.{self.table_name_text.get()}\n(")
 
-                primary_key = next(df.dtypes.items())[0].upper()
+                primary_key = next(df.dtypes.items())[0].upper().replace(' ', '_')
                 primary_key_type = next(df.dtypes.items())[1]
                 ddl_statements.append(f"    `{primary_key}` {get_ddl_type(primary_key_type)},")
 
@@ -78,7 +73,12 @@ class DDLGeneratorApp:
                         skip_first_iter = False
                         continue
 
-                    ddl_statements.append(f"    `{column_name.upper()}` Nullable({get_ddl_type(dtype)}),")
+                    if check_cyrillic(column_name) == True:
+                        ddl_statements.append(f"    `{column_name.upper().replace(' ', '_')}` Nullable({get_ddl_type(dtype)}) COMMENT '{column_name}',")
+                    else:
+                        ddl_statements.append(f"    `{column_name.upper().replace(' ', '_')}` Nullable({get_ddl_type(dtype)}),")
+
+
 
                 ddl_statements.append("    `SDU_LOAD_IN_DT` DateTime DEFAULT now()\n)")
                 ddl_statements.append(f"ENGINE = {get_engine_type(self.filepath, first_10000_rows=self.first_10000_rows_bool_var, df=df)}") # i don't like that df here
